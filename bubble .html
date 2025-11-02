@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cognitive Sequence Challenge</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* Custom styles for the bubbles and responsive layout */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f4f8;
+        }
+        .bubble {
+            transition: all 0.2s ease-in-out;
+            cursor: pointer;
+            user-select: none;
+            box-shadow: 0 4px 10px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.06);
+            border: 3px solid transparent;
+            /* Make it a circle */
+            border-radius: 50%;
+            width: 120px;
+            height: 120px;
+            /* Center content inside */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 5px;
+            line-height: 1.2;
+        }
+        .bubble:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+        }
+        .selected {
+            border-color: #3b82f6; /* Blue border when selected */
+            background-color: #dbeafe; /* Light blue background */
+            transform: scale(0.98);
+        }
+        .correct {
+            border-color: #10b981; /* Green border for correct */
+            background-color: #d1fae5;
+        }
+        .incorrect {
+            border-color: #ef4444; /* Red border for incorrect */
+            background-color: #fee2e2;
+            animation: shake 0.5s;
+        }
+        
+        /* Removed .failure-outline for the container */
+
+        /* Responsive adjustments for smaller screens */
+        @media (max-width: 640px) {
+            .bubble {
+                width: 90px;
+                height: 90px;
+                font-size: 1.125rem; /* text-xl */
+                padding: 3px;
+            }
+            #bubbles-container {
+                gap: 0.5rem; /* Tighter gap on mobile */
+                justify-content: center;
+            }
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+
+    <div id="game-container" class="w-full max-w-lg bg-white p-6 md:p-8 rounded-xl shadow-2xl transition-all duration-300">
+        <h1 class="text-3xl font-extrabold text-gray-800 text-center mb-6">Sequence Challenge</h1>
+
+        <!-- Score and Round Display -->
+        <div id="status-bar" class="flex justify-between items-center mb-6 text-lg font-semibold text-gray-600">
+            <span id="score-display">Score: 0/20</span>
+            <span id="round-display">Round: 0/20</span>
+        </div>
+
+        <!-- Timer Bar -->
+        <div class="mb-8 h-3 bg-gray-200 rounded-full overflow-hidden">
+            <div id="timer-bar" class="h-3 bg-blue-500 rounded-full transition-all duration-100 ease-linear" style="width: 100%;"></div>
+        </div>
+        
+        <!-- Game Area: Bubbles (to be selected in order) -->
+        <div id="bubbles-container" class="grid grid-cols-3 gap-4 md:gap-6 mb-8 justify-items-center" style="min-height: 150px;">
+            <!-- Bubbles will be injected here -->
+        </div>
+
+        <!-- Start/Message Area -->
+        <div id="message-area" class="text-center">
+            <button id="start-button"
+                    class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg transition-colors shadow-md hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-green-500/50">
+                Start Exam (20 Rounds)
+            </button>
+            
+            <!-- Pause and Restart buttons -->
+            <div id="game-controls" class="flex justify-center space-x-4 hidden">
+                <button id="pause-button"
+                        class="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-3 px-6 rounded-lg transition-colors shadow-md focus:outline-none focus:ring-4 focus:ring-yellow-400/50">
+                    Pause
+                </button>
+                <button id="restart-button"
+                        class="bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-6 rounded-lg transition-colors shadow-md focus:outline-none focus:ring-4 focus:ring-red-400/50">
+                    Restart
+                </button>
+            </div>
+
+            <p id="instruction-message" class="mt-4 text-gray-500 italic">
+                Select the three expressions in ascending order of their answers.
+            </p>
+        </div>
+    </div>
+
+    <!-- Modal for Result -->
+    <div id="result-modal" class="fixed inset-0 bg-gray-900 bg-opacity-75 hidden items-center justify-center p-4 z-50">
+        <div class="bg-white p-8 rounded-xl shadow-2xl text-center max-w-sm w-full transform transition-all duration-300 scale-95 opacity-0" id="modal-content">
+            <h2 class="text-3xl font-bold text-blue-600 mb-4">Exam Complete!</h2>
+            <p class="text-xl text-gray-700 mb-6">Your Final Score:</p>
+            <p id="final-score" class="text-6xl font-extrabold text-green-600 mb-8">0/20</p>
+            <button onclick="window.location.reload()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition-colors shadow-md">
+                Try Again
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // --- Game Setup and State ---
+        const gameState = {
+            roundsCorrect: 0, 
+            currentRound: 0,
+            totalRounds: 20,
+            timer: 15, // seconds per round (CONFIRMED: 15 seconds per question)
+            timeRemaining: 0,
+            timerInterval: null,
+            gameRunning: false, // Indicates if the game is currently running (not paused)
+            currentProblems: [], 
+            selectionOrder: [], 
+            correctOrder: [], 
+        };
+
+        // DOM Elements
+        const $startButton = document.getElementById('start-button');
+        const $scoreDisplay = document.getElementById('score-display');
+        const $roundDisplay = document.getElementById('round-display');
+        const $timerBar = document.getElementById('timer-bar');
+        const $bubblesContainer = document.getElementById('bubbles-container');
+        const $messageArea = document.getElementById('instruction-message');
+        const $resultModal = document.getElementById('result-modal');
+        const $modalContent = document.getElementById('modal-content');
+        const $finalScore = document.getElementById('final-score');
+        // $gameContainer is still here but will only be used for general styling, not failure outline
+        const $gameContainer = document.getElementById('game-container'); 
+        
+        // Control Elements
+        const $gameControls = document.getElementById('game-controls');
+        const $pauseButton = document.getElementById('pause-button');
+        const $restartButton = document.getElementById('restart-button');
+
+        // --- Utility Functions for Problem Generation and Formatting ---
+
+        /** Formats a number for display, showing up to two decimal places if needed. */
+        function formatAnswer(num) {
+            // Use toFixed(2) but ensure trailing zeros after a whole number are stripped
+            const formatted = num.toFixed(2);
+            return formatted.replace(/\.?0*$/, '');
+        }
+        
+        /** Generates an integer-based problem (result is always an integer). */
+        function generateIntegerProblem() {
+            const operators = ['+', '-', '*', '/'];
+            let operator = operators[Math.floor(Math.random() * operators.length)];
+            let num1, num2, answer, expression;
+
+            // Generate numbers between 1 and 15
+            const rand = () => Math.floor(Math.random() * 15) + 1;
+
+            if (operator === '/') {
+                // Ensure integer result and safe division
+                num2 = rand();
+                let multiple = Math.floor(Math.random() * 5) + 2; // Multiplier 2 to 6
+                num1 = num2 * multiple;
+                if (num2 === 0) num2 = 1;
+
+                answer = num1 / num2;
+                expression = `${num1} / ${num2}`;
+
+            } else if (operator === '-') {
+                // Ensure positive result
+                num1 = rand() + 5; 
+                num2 = rand();
+                if (num1 < num2) { [num1, num2] = [num2, num1]; }
+                answer = num1 - num2;
+                expression = `${num1} - ${num2}`;
+
+            } else if (operator === '*') {
+                // Keep multiplication simple for quick mental math
+                num1 = Math.floor(Math.random() * 8) + 2; // 2-9
+                num2 = Math.floor(Math.random() * 8) + 2; // 2-9
+                answer = num1 * num2;
+                expression = `${num1} * ${num2}`;
+
+            } else { // '+'
+                num1 = rand();
+                num2 = rand();
+                answer = num1 + num2;
+                expression = `${num1} + ${num2}`;
+            }
+
+            return { expression, answer };
+        }
+
+        /** Generates a float-based problem, aiming for simple one-decimal results. */
+        function generateFloatProblem() {
+            const operators = ['+', '-', '*', '/'];
+            let operator = operators[Math.floor(Math.random() * operators.length)];
+            let num1, num2, answer, expression;
+
+            // Generate numbers with one decimal place between 1.0 and 10.0
+            const randFloat = () => (Math.floor(Math.random() * 90) + 10) / 10; 
+            const randSmallInt = () => Math.floor(Math.random() * 5) + 2; // 2-6
+
+            if (operator === '+') {
+                num1 = randFloat();
+                num2 = randFloat();
+                answer = num1 + num2;
+            } else if (operator === '-') {
+                num1 = randFloat() + 5;
+                num2 = randFloat();
+                if (num1 < num2) { [num1, num2] = [num2, num1]; }
+                answer = num1 - num2;
+            } else if (operator === '*') {
+                 // Multiply small integer by a float for a clean result
+                num1 = randSmallInt();
+                num2 = randFloat();
+                answer = num1 * num2;
+            } else { // '/'
+                // Create division that results in a one-decimal or whole number
+                num2 = randSmallInt();
+                let multiple = (Math.floor(Math.random() * 10) + 1) / 2; // e.g. 0.5, 1.0, 1.5, ... 5.5
+                num1 = num2 * multiple;
+
+                // Round num1 to one decimal place for clean display
+                num1 = Math.round(num1 * 10) / 10;
+                
+                // If num1 is zero, regenerate to avoid 0/X
+                if (num1 === 0) return generateFloatProblem(); 
+
+                answer = num1 / num2;
+            }
+            
+            // Round answer to 2 decimal places to prevent float comparison issues
+            answer = Math.round(answer * 100) / 100;
+            
+            // Format expression, ensuring numbers are also rounded for display
+            expression = `${Math.round(num1 * 10) / 10} ${operator} ${Math.round(num2 * 10) / 10}`;
+
+            return { expression, answer };
+        }
+        
+        /** Generates a single math problem (either integer or float result). */
+        function generateProblem() {
+            // 50% chance of generating a float-based problem
+            const isFloat = Math.random() < 0.5; 
+
+            if (isFloat) {
+                return generateFloatProblem();
+            } else {
+                return generateIntegerProblem();
+            }
+        }
+
+        /** Generates three unique problems for a round. */
+        function generateRoundProblems() {
+            const problems = [];
+            const answers = new Set();
+            while (problems.length < 3) {
+                const newProblem = generateProblem();
+                // We must ensure the answers are unique so that there is a clear ascending order
+                if (!answers.has(newProblem.answer)) {
+                    answers.add(newProblem.answer);
+                    problems.push(newProblem);
+                }
+            }
+            return problems;
+        }
+
+        // --- Game Logic ---
+
+        /** Starts the timer for the current round. */
+        function startTimer() {
+            clearInterval(gameState.timerInterval);
+            // Only start the interval if the game is running (not paused)
+            if (!gameState.gameRunning) return; 
+
+            updateTimerBar();
+
+            gameState.timerInterval = setInterval(() => {
+                gameState.timeRemaining -= 0.1;
+                updateTimerBar();
+
+                if (gameState.timeRemaining <= 0) {
+                    clearInterval(gameState.timerInterval);
+                    // Time's up, automatically fail the round and move on
+                    showIncorrectFeedback();
+                }
+            }, 100);
+        }
+
+        /** Handles the Pause/Resume toggle. */
+        function handlePauseResume() {
+            if (gameState.gameRunning) {
+                // PAUSE
+                clearInterval(gameState.timerInterval);
+                gameState.gameRunning = false;
+                $pauseButton.textContent = 'Resume';
+                $pauseButton.classList.remove('bg-yellow-500', 'hover:bg-yellow-600');
+                $pauseButton.classList.add('bg-blue-500', 'hover:bg-blue-600');
+                showTemporaryMessage("Game Paused. Click Resume to continue.", 'paused'); 
+                $bubblesContainer.classList.add('pointer-events-none'); // Disable clicks
+            } else {
+                // RESUME
+                gameState.gameRunning = true;
+                $pauseButton.textContent = 'Pause';
+                $pauseButton.classList.remove('bg-blue-500', 'hover:bg-blue-600');
+                $pauseButton.classList.add('bg-yellow-500', 'hover:bg-yellow-600');
+                
+                // Resume timer only if we are in an active round
+                if (gameState.currentRound > 0 && gameState.currentRound <= gameState.totalRounds) {
+                    startTimer();
+                }
+
+                // Restore instruction message
+                $messageArea.textContent = 'Select the three expressions in ascending order of their answers.';
+                $messageArea.className = 'mt-4 text-gray-500 italic';
+                $bubblesContainer.classList.remove('pointer-events-none'); // Enable clicks
+            }
+        }
+
+        /** Handles the Restart action. */
+        function handleRestart() {
+            // Clear any existing timer
+            clearInterval(gameState.timerInterval); 
+            // Reset state
+            gameState.roundsCorrect = 0;
+            gameState.currentRound = 0;
+            gameState.gameRunning = true; // Set to true to start fresh
+            gameState.selectionOrder = [];
+            gameState.currentProblems = [];
+
+            // Reset pause button visual state
+            $pauseButton.textContent = 'Pause';
+            $pauseButton.classList.remove('bg-blue-500', 'hover:bg-blue-600');
+            $pauseButton.classList.add('bg-yellow-500', 'hover:bg-yellow-600');
+            
+            // Start a fresh game
+            startRound();
+        }
+
+        /** Updates the visual timer bar. */
+        function updateTimerBar() {
+            const percentage = (gameState.timeRemaining / gameState.timer) * 100;
+            $timerBar.style.width = `${Math.max(0, percentage)}%`;
+            $timerBar.classList.toggle('bg-red-500', percentage <= 30);
+            $timerBar.classList.toggle('bg-blue-500', percentage > 30);
+        }
+
+        /** Sets up and displays the problems for a new round. */
+        function startRound() {
+            // Check for game end before starting a new round
+            if (gameState.currentRound >= gameState.totalRounds) {
+                return endGame();
+            }
+
+            gameState.currentRound++;
+            updateStatusDisplay();
+
+            // 1. Reset time and generate problems and correct order
+            gameState.timeRemaining = gameState.timer; // Reset timer to 15 seconds
+            const problems = generateRoundProblems();
+            gameState.currentProblems = problems;
+            gameState.selectionOrder = [];
+            
+            // Sort answers based on their numerical value
+            gameState.correctOrder = problems.map(p => p.answer).sort((a, b) => a - b);
+
+
+            // 2. Update UI for Bubbles
+            $bubblesContainer.innerHTML = '';
+            problems.forEach((p, index) => {
+                const elementId = `bubble-${index}`;
+                p.elementId = elementId; // Store element ID in problem object
+
+                // Default HTML structure for the bubble
+                const bubbleHtml = `
+                    <div id="${elementId}" data-answer="${p.answer}" data-expression="${p.expression}"
+                         class="bubble bg-white text-gray-800 p-4 flex items-center justify-center rounded-full text-xl md:text-2xl font-bold transition-all duration-300 hover:bg-gray-50">
+                        ${p.expression}
+                    </div>
+                `;
+                $bubblesContainer.insertAdjacentHTML('beforeend', bubbleHtml);
+            });
+
+            // 3. Attach event listeners
+            document.querySelectorAll('.bubble').forEach(bubble => {
+                bubble.addEventListener('click', handleBubbleClick);
+            });
+
+            // 4. Start timer (if not paused by restart logic)
+            if (gameState.gameRunning) {
+                 startTimer();
+            }
+        }
+
+        /** Displays the correct sequence and answers for 5 seconds after a mistake or timeout. */
+        function showIncorrectFeedback() {
+            clearInterval(gameState.timerInterval);
+            
+            // 1. Show error message (NO red outline on container)
+            showTemporaryMessage("Incorrect or Time's Up! Showing correct sequence for 5 seconds.", 'incorrect');
+            $bubblesContainer.classList.add('pointer-events-none'); // Disable clicks
+
+            // 2. Get the bubbles based on the correct order
+            const orderedProblems = [...gameState.currentProblems].sort((a, b) => a.answer - b.answer);
+            
+            orderedProblems.forEach((problem, index) => {
+                const bubble = document.querySelector(`.bubble[data-answer="${problem.answer}"]`);
+                if (!bubble) return;
+
+                const sequenceNumber = index + 1;
+                
+                // 3. Apply detailed feedback styling and content
+                bubble.classList.remove('selected', 'correct', 'incorrect');
+                
+                // Applying red outline to the individual question bubble and light red background
+                bubble.style.backgroundColor = '#fef2f2'; // Very light red/pink background
+                bubble.style.borderColor = '#ef4444'; // Red border (incorrect)
+
+                bubble.innerHTML = `
+                    <div class="flex flex-col items-center">
+                        <span class="text-xs font-bold text-red-600">Correct: #${sequenceNumber}</span>
+                        <span class="text-xl md:text-2xl font-bold">${problem.expression}</span>
+                        <span class="text-sm font-semibold text-green-700 mt-1">Ans: ${formatAnswer(problem.answer)}</span>
+                    </div>
+                `;
+            });
+
+            // 4. Set a 5-second timeout before moving on
+            setTimeout(() => {
+                // No need to remove container outline, as it wasn't added
+                startNextRound();
+            }, 5000); // 5000 milliseconds = 5 seconds
+        }
+
+
+        /** Handles a bubble click by the user. */
+        function handleBubbleClick(event) {
+            const target = event.target.closest('.bubble');
+            // Check if the target is a valid, unselected bubble AND the game is running (not paused)
+            if (!target || target.classList.contains('selected') || !gameState.gameRunning) return;
+
+            // Use parseFloat to handle both integer and decimal values
+            const answer = parseFloat(target.dataset.answer); 
+
+            // Determine the expected answer for the current selection step (1st, 2nd, or 3rd)
+            const expectedAnswer = gameState.correctOrder[gameState.selectionOrder.length];
+
+            // Use a small epsilon for float comparison, though the rounding should help
+            const isCorrect = Math.abs(answer - expectedAnswer) < 0.001; 
+
+            if (isCorrect) {
+                // CORRECT SELECTION STEP
+                gameState.selectionOrder.push(answer);
+                target.classList.add('selected');
+                target.classList.add('correct');
+                
+                updateStatusDisplay();
+
+                // Check if all three have been correctly selected
+                if (gameState.selectionOrder.length === 3) {
+                    clearInterval(gameState.timerInterval);
+                    gameState.roundsCorrect++; // SUCCESS: Increment correct rounds
+                    updateStatusDisplay();
+                    showTemporaryMessage("Correct sequence! Great job. Moving to the next round.", 'correct');
+                    // Ensure the interaction is disabled during the delay
+                    $bubblesContainer.classList.add('pointer-events-none');
+                    setTimeout(startNextRound, 1000);
+                }
+
+            } else {
+                // INCORRECT SELECTION (Round ends immediately)
+                // Apply immediate visual feedback to the WRONG choice
+                target.classList.add('incorrect');
+                showIncorrectFeedback();
+            }
+        }
+
+        /** Displays a temporary feedback message. */
+        function showTemporaryMessage(text, type) {
+            $messageArea.textContent = text;
+            let className = 'mt-4 italic font-semibold ';
+            if (type === 'correct') {
+                className += 'text-green-600';
+            } else if (type === 'incorrect') {
+                className += 'text-red-600';
+            } else { // 'paused' or default message
+                className += 'text-gray-700';
+            }
+            $messageArea.className = className;
+        }
+
+        /** Updates the score and round text. */
+        function updateStatusDisplay() {
+            // Scoring format updated to Rounds Correct / Total Rounds
+            $scoreDisplay.textContent = `Score: ${gameState.roundsCorrect}/${gameState.totalRounds}`;
+            $roundDisplay.textContent = `Round: ${gameState.currentRound}/${gameState.totalRounds}`;
+        }
+
+        /** Transition to the next round. */
+        function startNextRound() {
+            // Cleanup and reset UI
+            $messageArea.textContent = 'Select the three expressions in ascending order of their answers.';
+            $messageArea.className = 'mt-4 text-gray-500 italic';
+            $bubblesContainer.classList.remove('pointer-events-none'); // Re-enable interaction
+
+            // Start the next round
+            startRound();
+        }
+
+
+        /** Initializes and starts the entire game. */
+        function startGame() {
+            gameState.roundsCorrect = 0;
+            gameState.currentRound = 0;
+            gameState.gameRunning = true; // Game starts active
+
+            $startButton.classList.add('hidden');
+            $gameControls.classList.remove('hidden'); // Show controls
+            $resultModal.classList.add('hidden');
+            $modalContent.classList.remove('scale-100', 'opacity-100');
+            
+            updateStatusDisplay();
+            startRound();
+        }
+
+        /** Ends the game and displays the final score modal. */
+        function endGame() {
+            clearInterval(gameState.timerInterval);
+            gameState.gameRunning = false;
+            $bubblesContainer.innerHTML = ''; // Clear bubbles
+            $messageArea.textContent = 'Exam complete. Check your results!';
+
+            $gameControls.classList.add('hidden'); // Hide controls
+            $startButton.classList.remove('hidden'); // Show Start button again
+
+            // Final score display: Rounds Correct / Total Rounds
+            $finalScore.textContent = `${gameState.roundsCorrect}/${gameState.totalRounds}`;
+            $resultModal.classList.remove('hidden');
+            $resultModal.classList.add('flex');
+            // Animate the modal
+            setTimeout(() => {
+                $modalContent.classList.add('scale-100', 'opacity-100');
+                $modalContent.classList.remove('scale-95', 'opacity-0');
+            }, 50);
+        }
+
+        // --- Event Listeners and Initialization ---
+
+        $startButton.addEventListener('click', startGame);
+        $pauseButton.addEventListener('click', handlePauseResume);
+        $restartButton.addEventListener('click', handleRestart);
+
+        // Initial setup for the score display
+        updateStatusDisplay();
+
+    </script>
+</body>
+</html>
