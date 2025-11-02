@@ -50,19 +50,21 @@
             animation: shake 0.5s;
         }
         
-        /* Removed .failure-outline for the container */
-
-        /* Responsive adjustments for smaller screens */
+        /* Mobile Responsiveness Fixes */
         @media (max-width: 640px) {
             .bubble {
-                width: 90px;
-                height: 90px;
-                font-size: 1.125rem; /* text-xl */
+                width: 85px; /* Reduced width for tight fit */
+                height: 85px;
+                font-size: 0.875rem; /* text-sm to ensure expression fits */
                 padding: 3px;
             }
             #bubbles-container {
-                gap: 0.5rem; /* Tighter gap on mobile */
+                gap: 0.25rem; /* Tighter gap on mobile */
                 justify-content: center;
+            }
+            /* Ensure the message area text also scales down */
+            #instruction-message, #status-bar {
+                 font-size: 0.875rem; /* text-sm */
             }
         }
     </style>
@@ -150,7 +152,6 @@
         const $resultModal = document.getElementById('result-modal');
         const $modalContent = document.getElementById('modal-content');
         const $finalScore = document.getElementById('final-score');
-        // $gameContainer is still here but will only be used for general styling, not failure outline
         const $gameContainer = document.getElementById('game-container'); 
         
         // Control Elements
@@ -437,18 +438,18 @@
                 bubble.style.backgroundColor = '#fef2f2'; // Very light red/pink background
                 bubble.style.borderColor = '#ef4444'; // Red border (incorrect)
 
+                // Updated classes for better mobile fit in the feedback modal
                 bubble.innerHTML = `
                     <div class="flex flex-col items-center">
                         <span class="text-xs font-bold text-red-600">Correct: #${sequenceNumber}</span>
-                        <span class="text-xl md:text-2xl font-bold">${problem.expression}</span>
-                        <span class="text-sm font-semibold text-green-700 mt-1">Ans: ${formatAnswer(problem.answer)}</span>
+                        <span class="text-base sm:text-lg font-bold">${problem.expression}</span>
+                        <span class="text-xs font-semibold text-green-700 mt-1">Ans: ${formatAnswer(problem.answer)}</span>
                     </div>
                 `;
             });
 
             // 4. Set a 5-second timeout before moving on
             setTimeout(() => {
-                // No need to remove container outline, as it wasn't added
                 startNextRound();
             }, 5000); // 5000 milliseconds = 5 seconds
         }
